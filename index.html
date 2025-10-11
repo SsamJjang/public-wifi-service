@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8"/>
+	<title>Kakao 지도 시작하기</title>
+	<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+	<div class="app">
+		<div class="header">
+			<div class="brand">
+				<div class="logo">Wi</div>
+				<div>
+					<div class="title">Public Wi‑Fi Explorer</div>
+					<div class="muted">Browse public Wi‑Fi spots in your area</div>
+				</div>
+			</div>
+			<div class="toolbar">
+				<button id="locBtn" class="small">Show my location</button>
+				<button class="secondary small">Export CSV</button>
+			</div>
+		</div>
+		<div class="main">
+			<div>
+				<div class="card">
+					<div id="status" class="status">Status messages will appear here.</div>
+				</div>
+				<div id="map" class="card" role="application"></div>
+			</div>
+			<div class="sidebar">
+				<div class="card">
+					<div class="infoTitle">Map controls</div>
+					<div class="muted">Use the buttons above to show your location, export results, or interact with the markers.</div>
+				</div>
+				<div class="card">
+					<div class="infoTitle">Legend</div>
+					<div class="muted">Red dot — your location<br/>Blue pins — Wi‑Fi locations (click to view details)</div>
+				</div>
+				<div class="card footer">Built from public data • Demo</div>
+			</div>
+		</div>
+	</div>
+	<!-- Load Kakao Maps SDK and call initMap when ready -->
+	<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=dd888f5caa8f6ab1d90a30be710885be&autoload=false"></script>
+	<script>
+		function setStatus(msg, isError) {
+			var s = document.getElementById('status');
+			var p = document.createElement('div');
+			p.textContent = msg;
+			p.style.color = isError ? '#b00020' : '#111';
+			s.appendChild(p);
+			console[isError ? 'error' : 'log'](msg);
+		}
+
+		function initMap() {
+			setStatus('Initializing map...');
+			
+			var container = document.getElementById('map');
+			// helper to create LatLng in a robust way
+			function makeLatLng(lat, lng) {
+				try {
+					return new kakao.maps.LatLng(lat, lng);
+				} catch (e) {
+					try { return kakao.maps.LatLng(lat, lng); } catch (e2) { return null; }
+				}
+			}
+
+			var options = {
+				center: makeLatLng(37.4097602, 126.6781647),
+				level: 12
+			};
+
+			var map = new kakao.maps.Map(container, options);
+
+			// helper to create marker and info window
+			var currentInfoWindow = null;
+
+			function closeCurrentInfoWindow() {
+				if (currentInfoWindow) {
+					currentInfoWindow.close();
+					currentInfoWindow = null;
+				}
+			}
+
+			function addMarker(item) {
+				if (!item || item.WGS84위도 == null || item.WGS84경도 == null) return;
+				var position = makeLatLng(item.WGS84위도, item.WGS84경도);
+				var marker = new kakao.maps.Marker({ position: position, map: map });
+
+				var infoHtml = '<div style="padding:12px;max-width:320px;font-family:Arial,Helvetica,sans-serif">'
+					+ '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+					+ '<strong style="font-size:16px">' + (item.설치장소명 || '-') + '</strong>'
+					+ '<button data-close style="margin-left:8px">✖</button>'
+					+ '</div>'
+					+ '<div style="font-size:13px;color:#333">'
+					+ '<div><strong>번호:</strong> ' + (item.번호 || '-') + '</div>'
+					+ '<div><strong>상세:</strong> ' + (item.설치장소상세 || '-') + '</div>'
+					+ '<div><strong>주소(도로):</strong> ' + (item.소재지도로명주소 || '-') + '</div>'
+					+ '<div><strong>주소(지번):</strong> ' + (item.소재지지번주소 || '-') + '</div>'
+					+ '<div><strong>관리기관:</strong> ' + (item.관리기관명 || '-') + '</div>'
+					+ '<div><strong>시설구분:</strong> ' + (item.설치시설구분 || '-') + '</div>'
+					+ '<div><strong>위도,경도:</strong> ' + (item.WGS84위도 || '-') + ', ' + (item.WGS84경도 || '-') + '</div>'
+					+ '</div>'
+					+ '</div>';
+
+				var infowindow = new kakao.maps.InfoWindow({ content: infoHtml, removable: true });
+
+				kakao.maps.event.addListener(marker, 'click', function() {
+					closeCurrentInfoWindow();
+					infowindow.open(map, marker);
+					currentInfoWindow = infowindow;
+					// attach handler to close button inside content
+					setTimeout(function(){
+						var btn = document.querySelector('#map button[data-close]');
+						if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
+					}, 10);
+				});
+				return marker;
+			}
+
+			// user location marker (red)
+			var userMarker = null;
+			function showUserLocation(lat, lng) {
+				closeCurrentInfoWindow();
+				if (userMarker) userMarker.setMap(null);
+				var pos = makeLatLng(lat, lng);
+				// create a red circle using CustomOverlay
+				var el = document.createElement('div');
+				el.style.width = '18px'; el.style.height = '18px'; el.style.borderRadius = '50%';
+				el.style.background = '#d00'; el.style.boxShadow = '0 0 6px rgba(0,0,0,0.3)';
+				el.style.border = '2px solid #fff';
+				var custom = new kakao.maps.CustomOverlay({ position: pos, content: el, yAnchor: 0.5 });
+				custom.setMap(map);
+				userMarker = custom;
+				map.setCenter(pos);
+			}
+
+			// hook up button
+			document.getElementById('locBtn').addEventListener('click', function(){
+				if (!navigator.geolocation) return setStatus('Geolocation not supported', true);
+				setStatus('Requesting geolocation...');
+				navigator.geolocation.getCurrentPosition(function(p){
+					setStatus('Got location: '+p.coords.latitude+','+p.coords.longitude);
+					showUserLocation(p.coords.latitude, p.coords.longitude);
+				}, function(err){
+					setStatus('Geolocation error: '+err.message, true);
+				});
+			});
+
+			// load data.json and add markers
+			setStatus('Fetching data.json...');
+			fetch('data.json')
+				.then(function(res){
+					if (!res.ok) throw new Error('HTTP '+res.status+' fetching data.json');
+					return res.json();
+				})
+				.then(function(data){
+					if (!Array.isArray(data) || data.length === 0) {
+						setStatus('data.json loaded but contains no array entries', true);
+						return;
+					}
+					var points = [];
+					var firstPos = null;
+					for (var i=0;i<data.length;i++) {
+						var item = data[i];
+						if (item && item.WGS84위도 != null && item.WGS84경도 != null) {
+							var pos = makeLatLng(item.WGS84위도, item.WGS84경도);
+							if (!firstPos) firstPos = pos;
+							points.push({ item: item, pos: pos });
+						}
+					}
+
+					// If MarkerClusterer is available, create markers once and use it (best performance)
+					if (kakao.maps && kakao.maps.MarkerClusterer) {
+						setStatus('Using kakao.maps.MarkerClusterer for '+points.length+' markers');
+						var markers = [];
+						for (var i2=0;i2<points.length;i2++) {
+							(function(pt){
+								var m = new kakao.maps.Marker({ position: pt.pos });
+								kakao.maps.event.addListener(m, 'click', function(){
+									closeCurrentInfoWindow();
+									var it = pt.item;
+									var infoHtml = '<div style="padding:12px;max-width:320px;font-family:Inter,Arial,Helvetica,sans-serif">'
+										+ '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+										+ '<strong style="font-size:16px">' + (it.설치장소명 || '-') + '</strong>'
+										+ '<button data-close style="margin-left:8px">✖</button>'
+										+ '</div>'
+										+ '<div style="font-size:13px;color:#333">'
+										+ '<div><strong>번호:</strong> ' + (it.번호 || '-') + '</div>'
+										+ '<div><strong>상세:</strong> ' + (it.설치장소상세 || '-') + '</div>'
+										+ '<div><strong>주소(도로):</strong> ' + (it.소재지도로명주소 || '-') + '</div>'
+										+ '<div><strong>주소(지번):</strong> ' + (it.소재지지번주소 || '-') + '</div>'
+										+ '<div><strong>관리기관:</strong> ' + (it.관리기관명 || '-') + '</div>'
+										+ '<div><strong>시설구분:</strong> ' + (it.설치시설구분 || '-') + '</div>'
+										+ '<div><strong>위도,경도:</strong> ' + (it.WGS84위도 || '-') + ', ' + (it.WGS84경도 || '-') + '</div>'
+										+ '</div>'
+										+ '</div>';
+									var infowindow = new kakao.maps.InfoWindow({ content: infoHtml, removable: true });
+									infowindow.open(map, m);
+									currentInfoWindow = infowindow;
+									setTimeout(function(){
+										var btn = document.querySelector('#map button[data-close]');
+										if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
+									}, 10);
+								});
+								markers.push(m);
+							})(points[i2]);
+						}
+						var clusterer = new kakao.maps.MarkerClusterer({ map: map, averageCenter: true, minLevel: 10 });
+						clusterer.addMarkers(markers);
+						setStatus('Added '+markers.length+' markers (clustered)');
+						if (firstPos) map.setCenter(firstPos);
+					} else {
+						// Fallback: render only markers inside current viewport and update on move to avoid lag
+						setStatus('MarkerClusterer not available — using viewport rendering for '+points.length+' points');
+						var activeMarkers = {}; // index -> marker
+						var markerPool = [];
+						var maxVisible = 600; // safety cap
+
+						function createMarkerForPoint(ptIndex) {
+							var pt = points[ptIndex];
+							// create a fresh marker for this point to avoid leftover listeners
+							var m = new kakao.maps.Marker({ position: pt.pos });
+							(function(marker, item){
+								kakao.maps.event.addListener(marker, 'click', function(){
+									closeCurrentInfoWindow();
+									var it = item;
+									var infoHtml = '<div style="padding:12px;max-width:320px;font-family:Inter,Arial,Helvetica,sans-serif">'
+										+ '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+										+ '<strong style="font-size:16px">' + (it.설치장소명 || '-') + '</strong>'
+										+ '<button data-close style="margin-left:8px">✖</button>'
+										+ '</div>'
+										+ '<div style="font-size:13px;color:#333">'
+										+ '<div><strong>번호:</strong> ' + (it.번호 || '-') + '</div>'
+										+ '<div><strong>상세:</strong> ' + (it.설치장소상세 || '-') + '</div>'
+										+ '<div><strong>주소(도로):</strong> ' + (it.소재지도로명주소 || '-') + '</div>'
+										+ '<div><strong>주소(지번):</strong> ' + (it.소재지지번주소 || '-') + '</div>'
+										+ '<div><strong>관리기관:</strong> ' + (it.관리기관명 || '-') + '</div>'
+										+ '<div><strong>시설구분:</strong> ' + (it.설치시설구분 || '-') + '</div>'
+										+ '<div><strong>위도,경도:</strong> ' + (it.WGS84위도 || '-') + ', ' + (it.WGS84경도 || '-') + '</div>'
+										+ '</div>'
+										+ '</div>';
+									var infowindow = new kakao.maps.InfoWindow({ content: infoHtml, removable: true });
+									infowindow.open(map, marker);
+									currentInfoWindow = infowindow;
+									setTimeout(function(){
+										var btn = document.querySelector('#map button[data-close]');
+										if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
+									}, 10);
+								});
+							})(m, pt.item);
+							m.setMap(map);
+							return m;
+						}
+
+						var updateTimer = null;
+						function updateVisible() {
+							if (updateTimer) clearTimeout(updateTimer);
+							updateTimer = setTimeout(function(){
+								var bounds = map.getBounds();
+								if (!bounds) return;
+								var visibleCount = 0;
+								// mark all points in bounds
+								for (var idx=0; idx<points.length; idx++) {
+									var pt = points[idx];
+									if (!pt.pos) continue;
+									if (bounds.contain(pt.pos)) {
+										if (!activeMarkers[idx]) {
+											if (visibleCount >= maxVisible) continue; // cap
+											activeMarkers[idx] = createMarkerForPoint(idx);
+										}
+										visibleCount++;
+									} else {
+										if (activeMarkers[idx]) {
+											activeMarkers[idx].setMap(null);
+											delete activeMarkers[idx];
+										}
+									}
+								}
+								setStatus('Viewport rendering: '+Object.keys(activeMarkers).length+' markers visible (pool '+markerPool.length+')');
+							}, 150);
+						}
+
+						// initial render and hooks
+						kakao.maps.event.addListener(map, 'idle', updateVisible);
+						kakao.maps.event.addListener(map, 'tilesloaded', updateVisible);
+						// initial
+						updateVisible();
+						setStatus('Viewport renderer initialized for '+points.length+' points');
+						if (firstPos) map.setCenter(firstPos);
+					}
+				})
+				.catch(function(err){
+					setStatus('Failed to load data.json: '+(err && err.message ? err.message : err), true);
+				});
+		}
+
+		// Robust SDK load handling with timeout
+		setStatus('Loading Kakao Maps SDK...');
+		var sdkTimeout = setTimeout(function(){
+			if (!window.kakao || !kakao.maps) {
+				setStatus('Kakao Maps SDK did not load within 7s. Check network or app key referer settings.', true);
+			}
+		}, 7000);
+
+		try {
+			// Prefer kakao.maps.load when it's available (SDK provides it).
+			if (window.kakao && kakao.maps && typeof kakao.maps.load === 'function') {
+				clearTimeout(sdkTimeout);
+				setStatus('Kakao Maps SDK load() available — loading');
+				kakao.maps.load(function(){ clearTimeout(sdkTimeout); setStatus('Kakao Maps SDK loaded'); initMap(); });
+			} else {
+				// Wait for the kakao object to appear, then try to initialize.
+				var checks = 0;
+				var intv = setInterval(function(){
+					checks++;
+					if (window.kakao && kakao.maps && typeof kakao.maps.load === 'function') {
+						clearInterval(intv); clearTimeout(sdkTimeout);
+						setStatus('Kakao Maps SDK load() became available — loading');
+						kakao.maps.load(function(){ clearTimeout(sdkTimeout); setStatus('Kakao Maps SDK loaded'); initMap(); });
+					} else if (window.kakao && kakao.maps) {
+						clearInterval(intv); clearTimeout(sdkTimeout);
+						setStatus('Kakao Maps SDK already available');
+						initMap();
+					} else if (checks > 20) { // ~10s give up
+						clearInterval(intv);
+					}
+				}, 500);
+			}
+		} catch (e) {
+			setStatus('Exception while loading Kakao SDK: '+e.message, true);
+		}
+
+		// Show global errors on page
+		window.addEventListener('error', function(ev){
+			setStatus('Runtime error: '+(ev && ev.message ? ev.message : ev), true);
+		});
+	</script>
+</body>
+</html>
