@@ -17,6 +17,8 @@
 			</div>
 			<div class="toolbar">
 				<button id="locBtn" class="small">Show my location</button>
+				<button id="nearestBtn" class="small">Find nearest Wi‑Fi</button>
+				<button id="navBtn" class="small" disabled>Navigate</button>
 				<button class="secondary small">Export CSV</button>
 			</div>
 		</div>
@@ -114,6 +116,15 @@
 						var btn = document.querySelector('#map button[data-close]');
 						if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
 					}, 10);
+					// set as selected for navigation
+					try {
+						if (window.__lastNearest && window.__lastNearest.overlay) window.__lastNearest.overlay.setMap(null);
+						var elh = document.createElement('div'); elh.style.width='22px'; elh.style.height='22px'; elh.style.borderRadius='50%'; elh.style.background='#0ea5a4'; elh.style.border='3px solid #fff'; elh.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';
+						var overlayh = new kakao.maps.CustomOverlay({ position: marker.getPosition(), content: elh, yAnchor: 0.5 });
+						overlayh.setMap(map);
+						window.__lastNearest = { pt: { item: item, pos: marker.getPosition() }, index: null, overlay: overlayh };
+						document.getElementById('navBtn').disabled = false;
+					} catch(e){}
 				});
 				return marker;
 			}
@@ -170,8 +181,20 @@
 						}
 					}
 
+					// helper to mark a selected point for navigation
+					function selectForNav(pt) {
+						try {
+							if (window.__lastNearest && window.__lastNearest.overlay) window.__lastNearest.overlay.setMap(null);
+						} catch(e){}
+						var elh = document.createElement('div'); elh.style.width='22px'; elh.style.height='22px'; elh.style.borderRadius='50%'; elh.style.background='#0ea5a4'; elh.style.border='3px solid #fff'; elh.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';
+						var overlayh = new kakao.maps.CustomOverlay({ position: pt.pos, content: elh, yAnchor: 0.5 });
+						overlayh.setMap(map);
+						window.__lastNearest = { pt: pt, index: null, overlay: overlayh };
+						document.getElementById('navBtn').disabled = false;
+					}
+
 					// If MarkerClusterer is available, create markers once and use it (best performance)
-					if (kakao.maps && kakao.maps.MarkerClusterer) {
+						if (kakao.maps && kakao.maps.MarkerClusterer) {
 						setStatus('Using kakao.maps.MarkerClusterer for '+points.length+' markers');
 						var markers = [];
 						for (var i2=0;i2<points.length;i2++) {
@@ -199,9 +222,11 @@
 									infowindow.open(map, m);
 									currentInfoWindow = infowindow;
 									setTimeout(function(){
-										var btn = document.querySelector('#map button[data-close]');
-										if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
-									}, 10);
+											var btn = document.querySelector('#map button[data-close]');
+											if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
+										}, 10);
+									// also mark this point as selected for navigation when clicked
+									try { selectForNav(pt); } catch(e){}
 								});
 								markers.push(m);
 							})(points[i2]);
@@ -247,6 +272,7 @@
 										var btn = document.querySelector('#map button[data-close]');
 										if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
 									}, 10);
+									try { selectForNav(pt); } catch(e){}
 								});
 							})(m, pt.item);
 							m.setMap(map);
@@ -289,6 +315,99 @@
 						setStatus('Viewport renderer initialized for '+points.length+' points');
 						if (firstPos) map.setCenter(firstPos);
 					}
+
+					// store points globally for nearest/search/navigation
+					window.__wifiPoints = points;
+					window.__lastNearest = null;
+					window.__routeOverlay = null;
+
+					function haversine(a, b) {
+						var toRad = Math.PI/180;
+						var dLat = (b.lat - a.lat) * toRad;
+						var dLon = (b.lng - a.lng) * toRad;
+						var lat1 = a.lat * toRad;
+						var lat2 = b.lat * toRad;
+						var R = 6371e3; // meters
+						var x = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)*Math.sin(dLon/2);
+						var c = 2*Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+						return R*c;
+					}
+
+					function getReferenceLocation() {
+						// prefer user marker (CustomOverlay or Marker)
+						try {
+							if (userMarker) {
+								if (typeof userMarker.getPosition === 'function') {
+									var p = userMarker.getPosition();
+									if (p) return { lat: p.getLat(), lng: p.getLng() };
+								}
+								// CustomOverlay stores position on its 'position' property
+								if (userMarker.getMap && typeof userMarker.getMap === 'function' && userMarker.getMap()) {
+									var pos = userMarker.getPosition ? userMarker.getPosition() : userMarker.get('position') || userMarker.position || null;
+									if (pos && pos.getLat) return { lat: pos.getLat(), lng: pos.getLng() };
+								}
+							}
+						} catch (e) { /* continue to center */ }
+						var c = map.getCenter();
+						return { lat: c.getLat(), lng: c.getLng() };
+					}
+
+					function findNearestAndHighlight() {
+						var ref = getReferenceLocation();
+						if (!ref) return setStatus('No reference location available', true);
+						var best = null; var bestDist = Infinity; var bestIdx = -1;
+						for (var i=0;i<points.length;i++) {
+							var pt = points[i];
+							var coord = { lat: pt.pos.getLat(), lng: pt.pos.getLng() };
+							var d = haversine(ref, coord);
+							if (d < bestDist) { bestDist = d; best = pt; bestIdx = i; }
+						}
+						if (!best) return setStatus('No points found', true);
+						setStatus('Nearest: '+(best.item.설치장소명||'')+' — '+Math.round(bestDist)+' m');
+						// center and open its info window (create temp marker)
+						map.setCenter(best.pos);
+						// create a temporary highlight marker (bigger blue)
+						if (window.__lastNearest && window.__lastNearest.overlay) window.__lastNearest.overlay.setMap(null);
+						var el = document.createElement('div'); el.style.width='22px'; el.style.height='22px'; el.style.borderRadius='50%'; el.style.background='#0ea5a4'; el.style.border='3px solid #fff'; el.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';
+						var overlay = new kakao.maps.CustomOverlay({ position: best.pos, content: el, yAnchor: 0.5 });
+						overlay.setMap(map);
+						window.__lastNearest = { pt: best, index: bestIdx, overlay: overlay };
+						// enable navigation
+						document.getElementById('navBtn').disabled = false;
+					}
+
+					function clearRoute() {
+						if (window.__routeOverlay) {
+							window.__routeOverlay.setMap(null);
+							window.__routeOverlay = null;
+						}
+					}
+
+					function navigateToNearest() {
+						if (!window.__lastNearest) return setStatus('Find nearest first', true);
+						var ref = getReferenceLocation();
+						var dest = { lat: window.__lastNearest.pt.pos.getLat(), lng: window.__lastNearest.pt.pos.getLng() };
+						setStatus('Requesting route...');
+						// Use OSRM public demo server for routing (profile: foot/walking or car). We'll use foot to avoid highways.
+						var coords = ref.lng+','+ref.lat+';'+dest.lng+','+dest.lat;
+						var url = 'https://router.project-osrm.org/route/v1/foot/'+coords+'?overview=full&geometries=geojson&steps=false';
+						fetch(url).then(function(r){ return r.json(); }).then(function(js){
+							if (!js || !js.routes || !js.routes.length) return setStatus('No route found', true);
+							var geom = js.routes[0].geometry; // GeoJSON LineString
+							var coords = geom.coordinates.map(function(c){ return new kakao.maps.LatLng(c[1], c[0]); });
+							// draw polyline
+							clearRoute();
+							var path = new kakao.maps.Polyline({ path: coords, strokeWeight: 5, strokeColor: '#2563eb', strokeOpacity: 0.9, strokeStyle: 'solid' });
+							path.setMap(map);
+							window.__routeOverlay = path;
+							setStatus('Route drawn — distance: '+Math.round(js.routes[0].distance)+' m, duration: '+Math.round(js.routes[0].duration)+' s');
+						}).catch(function(e){
+							setStatus('Routing error: '+(e && e.message?e.message:e), true);
+						});
+					}
+
+					document.getElementById('nearestBtn').addEventListener('click', function(){ findNearestAndHighlight(); });
+					document.getElementById('navBtn').addEventListener('click', function(){ navigateToNearest(); });
 				})
 				.catch(function(err){
 					setStatus('Failed to load data.json: '+(err && err.message ? err.message : err), true);
