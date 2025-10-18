@@ -31,6 +31,11 @@
 			</div>
 			<div class="sidebar">
 				<div class="card">
+					<div class="infoTitle">Favorites</div>
+					<div id="favorites" class="favorite-list muted">No favorites yet</div>
+				</div>
+
+				<div class="card">
 					<div class="infoTitle">Map controls</div>
 					<div class="muted">Use the buttons above to show your location, export results, or interact with the markers.</div>
 				</div>
@@ -90,9 +95,8 @@
 				var marker = new kakao.maps.Marker({ position: position, map: map });
 
 				var infoHtml = '<div style="padding:12px;max-width:320px;font-family:Arial,Helvetica,sans-serif">'
-					+ '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+					+ '<div style="display:flex;align-items:center;margin-bottom:8px">'
 					+ '<strong style="font-size:16px">' + (item.설치장소명 || '-') + '</strong>'
-					+ '<button data-close style="margin-left:8px">✖</button>'
 					+ '</div>'
 					+ '<div style="font-size:13px;color:#333">'
 					+ '<div><strong>번호:</strong> ' + (item.번호 || '-') + '</div>'
@@ -112,10 +116,7 @@
 					infowindow.open(map, marker);
 					currentInfoWindow = infowindow;
 					// attach handler to close button inside content
-					setTimeout(function(){
-						var btn = document.querySelector('#map button[data-close]');
-						if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
-					}, 10);
+					// InfoWindow is removable: user can close with built-in control
 					// set as selected for navigation
 					try {
 						if (window.__lastNearest && window.__lastNearest.overlay) window.__lastNearest.overlay.setMap(null);
@@ -203,11 +204,12 @@
 								kakao.maps.event.addListener(m, 'click', function(){
 									closeCurrentInfoWindow();
 									var it = pt.item;
-									var infoHtml = '<div style="padding:12px;max-width:320px;font-family:Inter,Arial,Helvetica,sans-serif">'
-										+ '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-										+ '<strong style="font-size:16px">' + (it.설치장소명 || '-') + '</strong>'
-										+ '<button data-close style="margin-left:8px">✖</button>'
-										+ '</div>'
+					var favKey = (it.번호 && String(it.번호)) || (it.WGS84위도+','+it.WGS84경도);
+					var infoHtml = '<div style="padding:12px;max-width:320px;font-family:Inter,Arial,Helvetica,sans-serif">'
+						+ '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+						+ '<strong style="font-size:16px">' + (it.설치장소명 || '-') + '</strong>'
+						+ '<button id="fav-btn-'+favKey+'" class="fav-btn" title="Toggle favorite">☆</button>'
+						+ '</div>'
 										+ '<div style="font-size:13px;color:#333">'
 										+ '<div><strong>번호:</strong> ' + (it.번호 || '-') + '</div>'
 										+ '<div><strong>상세:</strong> ' + (it.설치장소상세 || '-') + '</div>'
@@ -221,12 +223,22 @@
 									var infowindow = new kakao.maps.InfoWindow({ content: infoHtml, removable: true });
 									infowindow.open(map, m);
 									currentInfoWindow = infowindow;
-									setTimeout(function(){
-											var btn = document.querySelector('#map button[data-close]');
-											if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
-										}, 10);
+									// InfoWindow removable control will provide close UI
 									// also mark this point as selected for navigation when clicked
 									try { selectForNav(pt); } catch(e){}
+									// wire favorite button
+									setTimeout(function(){
+										try{
+											var btn = document.getElementById('fav-btn-'+favKey);
+											if (btn){
+												btn.textContent = (favoritesMap && favoritesMap[favKey]) ? '★' : '☆';
+												btn.addEventListener('click', function(){
+													var added = toggleFav(it);
+													btn.textContent = added ? '★' : '☆';
+												});
+											}
+										}catch(e){}
+									}, 0);
 								});
 								markers.push(m);
 							})(points[i2]);
@@ -251,9 +263,8 @@
 									closeCurrentInfoWindow();
 									var it = item;
 									var infoHtml = '<div style="padding:12px;max-width:320px;font-family:Inter,Arial,Helvetica,sans-serif">'
-										+ '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+										+ '<div style="display:flex;align-items:center;margin-bottom:8px">'
 										+ '<strong style="font-size:16px">' + (it.설치장소명 || '-') + '</strong>'
-										+ '<button data-close style="margin-left:8px">✖</button>'
 										+ '</div>'
 										+ '<div style="font-size:13px;color:#333">'
 										+ '<div><strong>번호:</strong> ' + (it.번호 || '-') + '</div>'
@@ -265,14 +276,25 @@
 										+ '<div><strong>위도,경도:</strong> ' + (it.WGS84위도 || '-') + ', ' + (it.WGS84경도 || '-') + '</div>'
 										+ '</div>'
 										+ '</div>';
+									var favKey = (pt.item.번호 && String(pt.item.번호)) || (pt.item.WGS84위도+','+pt.item.WGS84경도);
 									var infowindow = new kakao.maps.InfoWindow({ content: infoHtml, removable: true });
 									infowindow.open(map, marker);
 									currentInfoWindow = infowindow;
-									setTimeout(function(){
-										var btn = document.querySelector('#map button[data-close]');
-										if (btn) btn.addEventListener('click', function(){ infowindow.close(); currentInfoWindow = null; });
-									}, 10);
+									// rely on InfoWindow's removable control for closing
 									try { selectForNav(pt); } catch(e){}
+									// wire favorite button for this info window
+									setTimeout(function(){
+										try{
+											var btn = document.getElementById('fav-btn-'+favKey);
+											if (btn){
+												btn.textContent = (favoritesMap && favoritesMap[favKey]) ? '★' : '☆';
+												btn.addEventListener('click', function(){
+													var added = toggleFav(pt.item);
+													btn.textContent = added ? '★' : '☆';
+												});
+											}
+										}catch(e){}
+									},0);
 								});
 							})(m, pt.item);
 							m.setMap(map);
@@ -320,6 +342,48 @@
 					window.__wifiPoints = points;
 					window.__lastNearest = null;
 					window.__routeOverlay = null;
+
+					// Favorites: load and helpers
+					var favorites = JSON.parse(localStorage.getItem('pw_favs') || '[]');
+					var favoritesMap = {}; // quick lookup by key
+					favorites.forEach(function(f){ var k = f.번호 || (f.WGS84위도+','+f.WGS84경도); favoritesMap[k]=f; });
+
+					function saveFavs(){ localStorage.setItem('pw_favs', JSON.stringify(favorites)); favoritesMap = {}; favorites.forEach(function(f){ var k = f.번호 || (f.WGS84위도+','+f.WGS84경도); favoritesMap[k]=f; }); renderFavs(); }
+
+					function renderFavs(){
+						var el = document.getElementById('favorites');
+						if (!favorites || !favorites.length) { el.innerHTML = 'No favorites yet'; return; }
+						el.innerHTML = '';
+						favorites.forEach(function(f, idx){
+							var div = document.createElement('div'); div.className = 'favorite-item';
+							var left = document.createElement('div'); left.innerHTML = '<strong>'+ (f.설치장소명||'-') +'</strong><div class="muted">'+(f.소재지도로명주소||'')+'</div>';
+							var go = document.createElement('button'); go.textContent = 'Go'; go.addEventListener('click', function(){ map.setCenter(new kakao.maps.LatLng(f.WGS84위도, f.WGS84경도)); });
+							var del = document.createElement('button'); del.textContent = '✖'; del.addEventListener('click', function(){ favorites.splice(idx,1); saveFavs(); });
+							var right = document.createElement('div'); right.appendChild(go); right.appendChild(del);
+							div.appendChild(left); div.appendChild(right);
+							el.appendChild(div);
+						});
+					}
+
+					function toggleFav(item){
+						var key = item.번호 || (item.WGS84위도+','+item.WGS84경도);
+						if (favoritesMap[key]){
+							// remove
+							favorites = favorites.filter(function(f){ var k = f.번호 || (f.WGS84위도+','+f.WGS84경도); return (k !== key); });
+							// fallback safe removal by id
+							for (var i=0;i<favorites.length;i++){
+								if ((favorites[i].번호 && item.번호 && favorites[i].번호===item.번호)) { favorites.splice(i,1); break; }
+							}
+							saveFavs();
+							return false;
+						} else {
+							favorites.push(item);
+							saveFavs();
+							return true;
+						}
+					}
+
+					renderFavs();
 
 					function haversine(a, b) {
 						var toRad = Math.PI/180;
