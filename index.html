@@ -194,6 +194,29 @@
 						document.getElementById('navBtn').disabled = false;
 					}
 
+					// build an InfoWindow content as a DOM node so we can reliably attach handlers
+					function createInfoContent(it) {
+						var favKeyLocal = (it.번호 && String(it.번호)) || (it.WGS84위도+','+it.WGS84경도);
+						var wrap = document.createElement('div');
+						wrap.style.padding = '12px'; wrap.style.maxWidth = '320px'; wrap.style.fontFamily = 'Inter,Arial,Helvetica,sans-serif';
+						var header = document.createElement('div'); header.style.display='flex'; header.style.alignItems='center'; header.style.justifyContent='space-between'; header.style.marginBottom='8px';
+						var title = document.createElement('strong'); title.style.fontSize='16px'; title.textContent = (it.설치장소명 || '-');
+						header.appendChild(title);
+						var favBtn = document.createElement('button'); favBtn.className='fav-btn'; favBtn.title='Toggle favorite'; favBtn.style.marginLeft='8px';
+						favBtn.style.fontSize = '20px'; favBtn.style.lineHeight = '1'; favBtn.style.padding = '2px 6px';
+						var isFavNow = (typeof favoritesMap !== 'undefined') && (favoritesMap && favoritesMap[favKeyLocal]);
+						favBtn.textContent = isFavNow ? '★' : '☆';
+						favBtn.style.color = isFavNow ? '#f59e0b' : '#94a3b8';
+						favBtn.addEventListener('click', function(ev){ ev.stopPropagation(); var added = toggleFav(it); favBtn.textContent = added ? '★' : '☆'; favBtn.style.color = added ? '#f59e0b' : '#94a3b8'; });
+						header.appendChild(favBtn);
+						wrap.appendChild(header);
+						var body = document.createElement('div'); body.style.fontSize='13px'; body.style.color='#333';
+						var fields = [ ['번호', it.번호], ['상세', it.설치장소상세], ['주소(도로)', it.소재지도로명주소], ['주소(지번)', it.소재지지번주소], ['관리기관', it.관리기관명], ['시설구분', it.설치시설구분], ['위도,경도', (it.WGS84위도 || '-') + ', ' + (it.WGS84경도 || '-') ] ];
+						fields.forEach(function(f){ var d = document.createElement('div'); d.innerHTML = '<strong>'+f[0]+':</strong> '+(f[1]||'-'); body.appendChild(d); });
+						wrap.appendChild(body);
+						return wrap;
+					}
+
 					// If MarkerClusterer is available, create markers once and use it (best performance)
 						if (kakao.maps && kakao.maps.MarkerClusterer) {
 						setStatus('Using kakao.maps.MarkerClusterer for '+points.length+' markers');
@@ -204,41 +227,12 @@
 								kakao.maps.event.addListener(m, 'click', function(){
 									closeCurrentInfoWindow();
 									var it = pt.item;
-					var favKey = (it.번호 && String(it.번호)) || (it.WGS84위도+','+it.WGS84경도);
-					var infoHtml = '<div style="padding:12px;max-width:320px;font-family:Inter,Arial,Helvetica,sans-serif">'
-						+ '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
-						+ '<strong style="font-size:16px">' + (it.설치장소명 || '-') + '</strong>'
-						+ '<button id="fav-btn-'+favKey+'" class="fav-btn" title="Toggle favorite">☆</button>'
-						+ '</div>'
-										+ '<div style="font-size:13px;color:#333">'
-										+ '<div><strong>번호:</strong> ' + (it.번호 || '-') + '</div>'
-										+ '<div><strong>상세:</strong> ' + (it.설치장소상세 || '-') + '</div>'
-										+ '<div><strong>주소(도로):</strong> ' + (it.소재지도로명주소 || '-') + '</div>'
-										+ '<div><strong>주소(지번):</strong> ' + (it.소재지지번주소 || '-') + '</div>'
-										+ '<div><strong>관리기관:</strong> ' + (it.관리기관명 || '-') + '</div>'
-										+ '<div><strong>시설구분:</strong> ' + (it.설치시설구분 || '-') + '</div>'
-										+ '<div><strong>위도,경도:</strong> ' + (it.WGS84위도 || '-') + ', ' + (it.WGS84경도 || '-') + '</div>'
-										+ '</div>'
-										+ '</div>';
-									var infowindow = new kakao.maps.InfoWindow({ content: infoHtml, removable: true });
-									infowindow.open(map, m);
-									currentInfoWindow = infowindow;
-									// InfoWindow removable control will provide close UI
-									// also mark this point as selected for navigation when clicked
-									try { selectForNav(pt); } catch(e){}
-									// wire favorite button
-									setTimeout(function(){
-										try{
-											var btn = document.getElementById('fav-btn-'+favKey);
-											if (btn){
-												btn.textContent = (favoritesMap && favoritesMap[favKey]) ? '★' : '☆';
-												btn.addEventListener('click', function(){
-													var added = toggleFav(it);
-													btn.textContent = added ? '★' : '☆';
-												});
-											}
-										}catch(e){}
-									}, 0);
+					var node = createInfoContent(it);
+					var infowindow = new kakao.maps.InfoWindow({ content: node, removable: true });
+					infowindow.open(map, m);
+					currentInfoWindow = infowindow;
+					// also mark this point as selected for navigation when clicked
+					try { selectForNav(pt); } catch(e){}
 								});
 								markers.push(m);
 							})(points[i2]);
@@ -262,39 +256,11 @@
 								kakao.maps.event.addListener(marker, 'click', function(){
 									closeCurrentInfoWindow();
 									var it = item;
-									var infoHtml = '<div style="padding:12px;max-width:320px;font-family:Inter,Arial,Helvetica,sans-serif">'
-										+ '<div style="display:flex;align-items:center;margin-bottom:8px">'
-										+ '<strong style="font-size:16px">' + (it.설치장소명 || '-') + '</strong>'
-										+ '</div>'
-										+ '<div style="font-size:13px;color:#333">'
-										+ '<div><strong>번호:</strong> ' + (it.번호 || '-') + '</div>'
-										+ '<div><strong>상세:</strong> ' + (it.설치장소상세 || '-') + '</div>'
-										+ '<div><strong>주소(도로):</strong> ' + (it.소재지도로명주소 || '-') + '</div>'
-										+ '<div><strong>주소(지번):</strong> ' + (it.소재지지번주소 || '-') + '</div>'
-										+ '<div><strong>관리기관:</strong> ' + (it.관리기관명 || '-') + '</div>'
-										+ '<div><strong>시설구분:</strong> ' + (it.설치시설구분 || '-') + '</div>'
-										+ '<div><strong>위도,경도:</strong> ' + (it.WGS84위도 || '-') + ', ' + (it.WGS84경도 || '-') + '</div>'
-										+ '</div>'
-										+ '</div>';
-									var favKey = (pt.item.번호 && String(pt.item.번호)) || (pt.item.WGS84위도+','+pt.item.WGS84경도);
-									var infowindow = new kakao.maps.InfoWindow({ content: infoHtml, removable: true });
+									var node = createInfoContent(pt.item);
+									var infowindow = new kakao.maps.InfoWindow({ content: node, removable: true });
 									infowindow.open(map, marker);
 									currentInfoWindow = infowindow;
-									// rely on InfoWindow's removable control for closing
 									try { selectForNav(pt); } catch(e){}
-									// wire favorite button for this info window
-									setTimeout(function(){
-										try{
-											var btn = document.getElementById('fav-btn-'+favKey);
-											if (btn){
-												btn.textContent = (favoritesMap && favoritesMap[favKey]) ? '★' : '☆';
-												btn.addEventListener('click', function(){
-													var added = toggleFav(pt.item);
-													btn.textContent = added ? '★' : '☆';
-												});
-											}
-										}catch(e){}
-									},0);
 								});
 							})(m, pt.item);
 							m.setMap(map);
