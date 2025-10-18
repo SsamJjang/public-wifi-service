@@ -2,12 +2,13 @@
 <html>
 <head>
 	<meta charset="utf-8"/>
-	<title>Kakao 지도 시작하기</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+	<title>Public Wi‑Fi Explorer</title>
 	<link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 	<div class="app">
-		<div class="header">
+		<div class="header card">
 			<div class="brand">
 				<div class="logo">Wi</div>
 				<div>
@@ -16,31 +17,26 @@
 				</div>
 			</div>
 			<div class="toolbar">
-				<button id="locBtn" class="small">Show my location</button>
-				<button id="nearestBtn" class="small">Find nearest Wi‑Fi</button>
-				<button id="navBtn" class="small" disabled>Navigate</button>
-				<button class="secondary small">Export CSV</button>
+				<button id="locBtn">Show my location</button>
+				<button id="nearestBtn" disabled>Find nearest Wi‑Fi</button>
+				<button id="navBtn" disabled>Navigate</button>
+				<button class="secondary">Export CSV</button>
 			</div>
 		</div>
 		<div class="main">
-			<div>
-				<div id="map" class="card" role="application"></div>
-			</div>
+			<div id="map"></div>
 			<div class="sidebar">
 				<div class="card">
 					<div class="infoTitle">Favorites</div>
-					<div id="favorites" class="favorite-list muted">No favorites yet</div>
-				</div>
-
-				<div class="card">
-					<div class="infoTitle">Map controls</div>
-					<div class="muted">Use the buttons above to show your location, export results, or interact with the markers.</div>
+					<div id="favorites" class="favorite-list">No favorites yet</div>
 				</div>
 				<div class="card">
 					<div class="infoTitle">Legend</div>
-					<div class="muted">Red dot — your location<br/>Blue pins — Wi‑Fi locations (click to view details)</div>
+					<div class="muted">
+						● Red dot - Your location<br>
+						📍 Blue pins - Wi‑Fi locations
+					</div>
 				</div>
-				<div class="card footer">Built from public data • Demo</div>
 			</div>
 		</div>
 	</div>
