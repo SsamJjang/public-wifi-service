@@ -29,10 +29,10 @@ html, body {
   padding: 0;
   position: relative;
   z-index: 2;
-  /* Allow pointer events to pass through the page shell so the fixed map underneath
-     can receive touch gestures on mobile. Interactive UI pieces (header/sidebar)
-     will explicitly enable pointer-events below. */
-  pointer-events: none;
+  /* Default: allow pointer events on desktop so the UI is interactive. On mobile
+     we switch .app to pass pointer-events through so the fixed full-viewport map
+     can receive touch gestures. */
+  pointer-events: auto;
 }
 
 /* Header */
