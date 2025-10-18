@@ -491,6 +491,38 @@
 
 		// Robust SDK load handling with timeout
 		console.log('Loading Kakao Maps SDK...');
+
+		// Small helper to show status messages; ensures setStatus exists
+		(function(){
+			function ensureStatusElement(){
+				var el = document.getElementById('app-status');
+				if (!el) {
+					el = document.createElement('div');
+					el.id = 'app-status';
+					el.style.position = 'fixed';
+					el.style.left = '12px';
+					el.style.bottom = '12px';
+					el.style.padding = '8px 12px';
+					el.style.background = 'rgba(0,0,0,0.6)';
+					el.style.color = '#fff';
+					el.style.borderRadius = '8px';
+					el.style.zIndex = 9999;
+					document.body.appendChild(el);
+				}
+				return el;
+			}
+
+			window.setStatus = function(msg, isError){
+				try{
+					if (isError) console.error(msg); else console.log(msg);
+					var el = ensureStatusElement();
+					el.textContent = String(msg || '');
+					// auto-hide after a short time
+					clearTimeout(window.__statusHideTimer);
+					window.__statusHideTimer = setTimeout(function(){ if (el) el.textContent = ''; }, 4000);
+				}catch(e){ /* swallow */ }
+			};
+		})();
 		var sdkTimeout = setTimeout(function(){
 			if (!window.kakao || !kakao.maps) {
 				console.error('Kakao Maps SDK did not load within 7s. Check network or app key referer settings.');
