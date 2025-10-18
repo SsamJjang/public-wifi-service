@@ -29,6 +29,10 @@ html, body {
   padding: 0;
   position: relative;
   z-index: 2;
+  /* Allow pointer events to pass through the page shell so the fixed map underneath
+     can receive touch gestures on mobile. Interactive UI pieces (header/sidebar)
+     will explicitly enable pointer-events below. */
+  pointer-events: none;
 }
 
 /* Header */
@@ -46,6 +50,8 @@ html, body {
   right: 0;
   z-index: 3;
   box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  /* header must accept pointer events even though .app passes them through */
+  pointer-events: auto;
 }
 @keyframes slideDown{
   from{opacity:0;transform:translateY(-20px)}
@@ -78,6 +84,8 @@ html, body {
   display:flex;gap:8px;align-items:center;padding:8px 16px;
   position:relative
 }
+
+.toolbar, .toolbar button { pointer-events: auto; }
 /* Buttons & Controls */
 button{
   background:var(--gradient);color:#fff;
@@ -136,6 +144,9 @@ button.secondary:hover{
 .sidebar > * {
   pointer-events: all;
 }
+
+/* ensure sidebar container itself can accept gestures for scrolling on mobile */
+.sidebar { pointer-events: auto; }
 
 /* Cards */
 .card{
