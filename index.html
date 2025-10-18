@@ -24,9 +24,6 @@
 		</div>
 		<div class="main">
 			<div>
-				<div class="card">
-					<div id="status" class="status">Status messages will appear here.</div>
-				</div>
 				<div id="map" class="card" role="application"></div>
 			</div>
 			<div class="sidebar">
@@ -50,17 +47,8 @@
 	<!-- Load Kakao Maps SDK and call initMap when ready -->
 	<script type="text/javascript" src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=dd888f5caa8f6ab1d90a30be710885be&autoload=false"></script>
 	<script>
-		function setStatus(msg, isError) {
-			var s = document.getElementById('status');
-			var p = document.createElement('div');
-			p.textContent = msg;
-			p.style.color = isError ? '#b00020' : '#111';
-			s.appendChild(p);
-			console[isError ? 'error' : 'log'](msg);
-		}
-
 		function initMap() {
-			setStatus('Initializing map...');
+			console.log('Initializing map...');
 			
 			var container = document.getElementById('map');
 			// helper to create LatLng in a robust way
@@ -149,18 +137,21 @@
 
 			// hook up button
 			document.getElementById('locBtn').addEventListener('click', function(){
-				if (!navigator.geolocation) return setStatus('Geolocation not supported', true);
-				setStatus('Requesting geolocation...');
-				navigator.geolocation.getCurrentPosition(function(p){
-					setStatus('Got location: '+p.coords.latitude+','+p.coords.longitude);
+				if (!navigator.geolocation) {
+					console.error('Geolocation not supported');
+					return;
+				}
+				console.log('Requesting geolocation...');
+				navigator.geolocation.getCurrentPosition(p => {
+					console.log('Got location: '+p.coords.latitude+','+p.coords.longitude);
 					showUserLocation(p.coords.latitude, p.coords.longitude);
-				}, function(err){
-					setStatus('Geolocation error: '+err.message, true);
+					}, function(err){
+					console.error('Geolocation error: '+err.message);
 				});
 			});
 
 			// load data.json and add markers
-			setStatus('Fetching data.json...');
+			console.log('Fetching data.json...');
 			fetch('data.json')
 				.then(function(res){
 					if (!res.ok) throw new Error('HTTP '+res.status+' fetching data.json');
@@ -168,7 +159,7 @@
 				})
 				.then(function(data){
 					if (!Array.isArray(data) || data.length === 0) {
-						setStatus('data.json loaded but contains no array entries', true);
+						console.error('data.json loaded but contains no array entries');
 						return;
 					}
 					var points = [];
@@ -242,7 +233,7 @@
 
 					// If MarkerClusterer is available, create markers once and use it (best performance)
 						if (kakao.maps && kakao.maps.MarkerClusterer) {
-						setStatus('Using kakao.maps.MarkerClusterer for '+points.length+' markers');
+						console.log('Using kakao.maps.MarkerClusterer for '+points.length+' markers');
 						var markers = [];
 						for (var i2=0;i2<points.length;i2++) {
 							(function(pt){
@@ -262,11 +253,11 @@
 						}
 						var clusterer = new kakao.maps.MarkerClusterer({ map: map, averageCenter: true, minLevel: 10 });
 						clusterer.addMarkers(markers);
-						setStatus('Added '+markers.length+' markers (clustered)');
+						console.log('Added '+markers.length+' markers (clustered)');
 						if (firstPos) map.setCenter(firstPos);
 					} else {
 						// Fallback: render only markers inside current viewport and update on move to avoid lag
-						setStatus('MarkerClusterer not available — using viewport rendering for '+points.length+' points');
+						console.log('MarkerClusterer not available — using viewport rendering for '+points.length+' points');
 						var activeMarkers = {}; // index -> marker
 						var markerPool = [];
 						var maxVisible = 600; // safety cap
@@ -314,7 +305,7 @@
 										}
 									}
 								}
-								setStatus('Viewport rendering: '+Object.keys(activeMarkers).length+' markers visible (pool '+markerPool.length+')');
+								console.log('Viewport rendering: '+Object.keys(activeMarkers).length+' markers visible (pool '+markerPool.length+')');
 							}, 150);
 						}
 
@@ -323,7 +314,7 @@
 						kakao.maps.event.addListener(map, 'tilesloaded', updateVisible);
 						// initial
 						updateVisible();
-						setStatus('Viewport renderer initialized for '+points.length+' points');
+						console.log('Viewport renderer initialized for '+points.length+' points');
 						if (firstPos) map.setCenter(firstPos);
 					}
 
@@ -430,7 +421,10 @@
 
 					function findNearestAndHighlight() {
 						var ref = getReferenceLocation();
-						if (!ref) return setStatus('No reference location available', true);
+						if (!ref) {
+							console.error('No reference location available');
+							return;
+						}
 						var best = null; var bestDist = Infinity; var bestIdx = -1;
 						for (var i=0;i<points.length;i++) {
 							var pt = points[i];
@@ -438,8 +432,11 @@
 							var d = haversine(ref, coord);
 							if (d < bestDist) { bestDist = d; best = pt; bestIdx = i; }
 						}
-						if (!best) return setStatus('No points found', true);
-						setStatus('Nearest: '+(best.item.설치장소명||'')+' — '+Math.round(bestDist)+' m');
+						if (!best) {
+							console.error('No points found');
+							return;
+						}
+						console.log('Nearest: '+(best.item.설치장소명||'')+' — '+Math.round(bestDist)+' m');
 						// center and open its info window (create temp marker)
 						map.setCenter(best.pos);
 						// create a temporary highlight marker (bigger blue)
@@ -460,15 +457,21 @@
 					}
 
 					function navigateToNearest() {
-						if (!window.__lastNearest) return setStatus('Find nearest first', true);
+						if (!window.__lastNearest) {
+							console.error('Find nearest first');
+							return;
+						}
 						var ref = getReferenceLocation();
 						var dest = { lat: window.__lastNearest.pt.pos.getLat(), lng: window.__lastNearest.pt.pos.getLng() };
-						setStatus('Requesting route...');
+						console.log('Requesting route...');
 						// Use OSRM public demo server for routing (profile: foot/walking or car). We'll use foot to avoid highways.
 						var coords = ref.lng+','+ref.lat+';'+dest.lng+','+dest.lat;
 						var url = 'https://router.project-osrm.org/route/v1/foot/'+coords+'?overview=full&geometries=geojson&steps=false';
 						fetch(url).then(function(r){ return r.json(); }).then(function(js){
-							if (!js || !js.routes || !js.routes.length) return setStatus('No route found', true);
+							if (!js || !js.routes || !js.routes.length) {
+								console.error('No route found');
+								return;
+							}
 							var geom = js.routes[0].geometry; // GeoJSON LineString
 							var coords = geom.coordinates.map(function(c){ return new kakao.maps.LatLng(c[1], c[0]); });
 							// draw polyline
@@ -476,9 +479,9 @@
 							var path = new kakao.maps.Polyline({ path: coords, strokeWeight: 5, strokeColor: '#2563eb', strokeOpacity: 0.9, strokeStyle: 'solid' });
 							path.setMap(map);
 							window.__routeOverlay = path;
-							setStatus('Route drawn — distance: '+Math.round(js.routes[0].distance)+' m, duration: '+Math.round(js.routes[0].duration)+' s');
+							console.log('Route drawn — distance: '+Math.round(js.routes[0].distance)+' m, duration: '+Math.round(js.routes[0].duration)+' s');
 						}).catch(function(e){
-							setStatus('Routing error: '+(e && e.message?e.message:e), true);
+							console.error('Routing error: '+(e && e.message?e.message:e));
 						});
 					}
 
@@ -486,15 +489,15 @@
 					document.getElementById('navBtn').addEventListener('click', function(){ navigateToNearest(); });
 				})
 				.catch(function(err){
-					setStatus('Failed to load data.json: '+(err && err.message ? err.message : err), true);
+					console.error('Failed to load data.json: '+(err && err.message ? err.message : err));
 				});
 		}
 
 		// Robust SDK load handling with timeout
-		setStatus('Loading Kakao Maps SDK...');
+		console.log('Loading Kakao Maps SDK...');
 		var sdkTimeout = setTimeout(function(){
 			if (!window.kakao || !kakao.maps) {
-				setStatus('Kakao Maps SDK did not load within 7s. Check network or app key referer settings.', true);
+				console.error('Kakao Maps SDK did not load within 7s. Check network or app key referer settings.');
 			}
 		}, 7000);
 
@@ -502,7 +505,7 @@
 			// Prefer kakao.maps.load when it's available (SDK provides it).
 			if (window.kakao && kakao.maps && typeof kakao.maps.load === 'function') {
 				clearTimeout(sdkTimeout);
-				setStatus('Kakao Maps SDK load() available — loading');
+				console.log('Kakao Maps SDK load() available — loading');
 				kakao.maps.load(function(){ clearTimeout(sdkTimeout); setStatus('Kakao Maps SDK loaded'); initMap(); });
 			} else {
 				// Wait for the kakao object to appear, then try to initialize.
@@ -526,9 +529,9 @@
 			setStatus('Exception while loading Kakao SDK: '+e.message, true);
 		}
 
-		// Show global errors on page
+		// Show global errors in console
 		window.addEventListener('error', function(ev){
-			setStatus('Runtime error: '+(ev && ev.message ? ev.message : ev), true);
+			console.error('Runtime error: '+(ev && ev.message ? ev.message : ev));
 		});
 	</script>
 </body>
